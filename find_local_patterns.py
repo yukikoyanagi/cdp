@@ -2,7 +2,8 @@
 #
 # File: find_local_patterns.py
 # Author: Rasmus Villemoes
-
+# History:
+#  2016/03/04: yk: added output argument
 
 import sys
 import os
@@ -430,6 +431,8 @@ parser = ArgumentParser()
 
 parser.add_argument("files", nargs='*')
 
+parser.add_argument("--output", help="output file")
+
 parser.add_argument("--window-size", type=int,
                     help="the window size (in atoms) to use on either side of each H-bond", metavar="SIZE",
                     default=window_size)
@@ -502,6 +505,9 @@ whitelist_files = args.whitelist
 if whitelist_files is None:
     whitelist_files = []
 whitelist = read_whitelist_files(whitelist_files)
+
+if args.output:
+    sys.stdout = open(args.output, "w")
 
 # For acid_length > 0, the --show-residues, --always-include-remotes and --remote-sign options also have meaning.
 
