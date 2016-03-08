@@ -22,7 +22,7 @@
 import argparse
 import collections
 
-bond_col = 6  # Bond description is at the 7th column in the input file
+bond_col = 6  # Bond description is 7th column in the input file
 
 # Get arguments
 parser = argparse.ArgumentParser(
@@ -31,7 +31,8 @@ parser = argparse.ArgumentParser(
 parser.add_argument('source',
                     help='File to be filtered')
 parser.add_argument('destination', help='Filtered file')
-parser.add_argument('minimum', type=int, help='Minimum no. of occurrence')
+parser.add_argument('minimum', type=int,
+                    help='Minimum no. of occurrence')
 args = parser.parse_args()
 
 # Read bonds
