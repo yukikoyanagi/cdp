@@ -5,7 +5,7 @@
 # usage: get_rotations.py [-h] [--suffix SUFFIX] input outdir prot_dir
 #
 # Get rotation vector for each bond in input file. Output is one file
-# per protein.
+# per bond description.
 #
 # positional arguments:
 #   input            Input file containing bond information.
@@ -20,6 +20,7 @@
 # History:
 #  2016/03/08: yk: Created
 #  2016/03/16: yk: Made suffix optional. Added help & usage comment.
+#  2016/03/21: yk: Output per bond description rather than per protein
 #
 
 
@@ -36,7 +37,8 @@ def get_rotations(input, outdir, suffix, prot_dir):
             cols = line.split()
             protein = cols[0]
             l_num = cols[1]
-            bonds.append((protein, l_num))
+            pattern = cols[6]
+            bonds.append((protein, l_num, pattern))
 
     # Build dict (protein:list of rotations) from list.
     # Assumes rotation vectors are in cols 16-19.
@@ -47,24 +49,23 @@ def get_rotations(input, outdir, suffix, prot_dir):
                 if i == int(bond[1])-1:
                     cols = line.split()
                     rot = (cols[15], cols[16], cols[17], cols[18])
-                    if bond[0] in rotations:
-                        rotations[bond[0]].append(rot)
+                    if bond[2] in rotations:
+                        rotations[bond[2]].append(rot)
                     else:
-                        rotations[bond[0]] = [rot]
+                        rotations[bond[2]] = [rot]
 
-    for protein in rotations:
-        vs = rotations[protein]
+    for vs in rotations.iteritems():
         with open('{}/{}_{}.txt'.format(
-                outdir, protein, suffix), 'w') as o:
+                outdir, vs[0], suffix), 'w') as o:
             o.write('\n'.join(
                 '{}\t{}\t{}\t{}'.format(v[0], v[1], v[2], v[3])
-                for v in vs))
+                for v in vs[1]))
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Get rotation vector for each bond in '
-        'input file. Output is one file per protein.')
+        'input file. Output is one file per bond description.')
     parser.add_argument('input', help='Input file containing '
                         'bond information.')
     parser.add_argument('outdir', help='Output file directory.')
