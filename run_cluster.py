@@ -2,7 +2,7 @@
 #
 # File: run_cluster.py
 #
-# Time-stamp: <2016-03-29 13:07:25 au447708>
+# Time-stamp: <2016-03-30 11:22:58 au447708>
 #
 # Author: Yuki Koyanagi
 
@@ -31,6 +31,8 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size):
 
     flp_out = os.path.join(temp_dir, 'flp.txt')
 
+    print "files: {}".format(files)
+
     cmd = ('python find_local_patterns.py ' +
            files +
            ' --output ' +
@@ -43,8 +45,11 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size):
     filter_bonds.filter(flp_out, fb_out, min_occurrence)
 
     # run get_rotations
-    get_rotations.get_rotations(fb_out, out_dir, None,
-                                os.path.dirname(input))
+    if os.path.isdir(input):
+        prot_dir = input
+    else:
+        prot_dir = os.path.dirname(input)
+    get_rotations.get_rotations(fb_out, out_dir, None, prot_dir)
 
 # run cluster analysis
 
