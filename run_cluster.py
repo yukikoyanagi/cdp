@@ -2,9 +2,13 @@
 #
 # File: run_cluster.py
 #
-# Time-stamp: <2016-03-30 11:22:58 au447708>
+# Time-stamp: <2016-04-08 11:39:02 au447708>
 #
 # Author: Yuki Koyanagi
+#
+# History:
+#  2016/03/29: yk: Created
+#  2016/04/08: yk: Split arg for find_local_patterns
 
 
 import os
@@ -25,20 +29,20 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size):
         fs = []
         for file in os.listdir(input):
             fs.append(os.path.join(input, file))
-        files = ' '.join(fs)
     elif os.path.isfile(input):
-        files = input
+        fs.append(input)
 
+    # List of files might be too long -split it
+    flist = [fs[i:i+200] for i in xrange(0, len(fs), 200)]
     flp_out = os.path.join(temp_dir, 'flp.txt')
 
-    print "files: {}".format(files)
-
-    cmd = ('python find_local_patterns.py ' +
-           files +
-           ' --output ' +
-           flp_out +
-           ' --window-size ' + str(window_size))
-    os.system(cmd)
+    for s in flist:
+        files = ' '.join(s)
+        cmd = ('python find_local_patterns.py ' +
+               files +
+               ' --window-size ' + str(window_size) +
+               ' >> {}'.format(flp_out))
+        os.system(cmd)
 
     # run filter_bonds
     fb_out = os.path.join(temp_dir, 'filtered.txt')
@@ -49,8 +53,8 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size):
         prot_dir = input
     else:
         prot_dir = os.path.dirname(input)
-    get_rotations.get_rotations(fb_out, out_dir, None, prot_dir)
+    get_rotations.get_rotations(fb_out, out_dir, prot_dir)
 
-# run cluster analysis
+    # run cluster analysis
 
 # run as script
