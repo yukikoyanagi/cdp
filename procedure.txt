@@ -1,0 +1,19 @@
+The files window?.txt contains computations of the "local" pattern
+around each of the ~1.08e6 H-bonds. Line format:
+
+[pdb-id] [line number] [N idx] [O idx] [cluster] [length] [long
+pattern] [short pattern]
+
+To pick out the occuring length/pattern combinations, and sort by
+frequency:
+
+  cut -f6,8 window3.txt | sort | uniqc.sh | sort -k1nr
+
+augment that line by | awk '$1 > 1' to only pick those with at least
+two occurences (no point in "clustering" one point).
+
+
+
+
+for x in 3 4 5 6 ; do cut -f6,8 window${x}.txt | sort | uniqc.sh | sort -k1nr | awk '$1 > 1' > window${x}_len_pat_freq.txt ; done
+
