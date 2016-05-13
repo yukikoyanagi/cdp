@@ -2,21 +2,27 @@
 #
 # File: run_cluster.py
 #
-# Time-stamp: <2016-04-08 11:39:02 au447708>
+# Time-stamp: <2016-05-13 09:35:34 au447708>
 #
 # Author: Yuki Koyanagi
 #
 # History:
 #  2016/03/29: yk: Created
 #  2016/04/08: yk: Split arg for find_local_patterns
+#  2016/04/19: yk: Now runs cluster analysis
 
 
 import os
+import shutil
 import filter_bonds
 import get_rotations
 
+cluster_script = 'Rasmus2.r'
+cluster_file = 'StartClustSubsetVers4.txt'
 
-def run(min_occurrence, temp_dir, out_dir, input, window_size):
+
+def run(min_occurrence, temp_dir, out_dir, input, window_size,
+        nearby_remotes=None, nearby_twists=None, residue_scheme=None):
     # create temp and out dir if they don't exist
     if not os.path.exists(temp_dir):
         os.mkdir(temp_dir)
@@ -32,16 +38,34 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size):
     elif os.path.isfile(input):
         fs.append(input)
 
+    # Sensible values for parameters if not given
+    if nearby_remotes is None:
+        nearby_remotes = 0  # No remote info
+    if nearby_twists is None:
+        nearby_twists = -1  # No twist info
+    if residue_scheme is None:
+        residue_scheme = 0  # Disable residue
+
     # List of files might be too long -split it
     flist = [fs[i:i+200] for i in xrange(0, len(fs), 200)]
     flp_out = os.path.join(temp_dir, 'flp.txt')
 
     for s in flist:
         files = ' '.join(s)
-        cmd = ('python find_local_patterns.py ' +
-               files +
-               ' --window-size ' + str(window_size) +
-               ' >> {}'.format(flp_out))
+        cmd = ('python find_local_patterns.py {f}'
+               ' --window-size {w}'
+               ' --nearby-remotes {r}'
+               ' --nearby-twists {t}'
+               ' --residue-scheme {s}'
+               ' --always-include-remotes'
+               ' --show-residues'
+               ' >> {o}').format(
+                   f=files,
+                   w=str(window_size),
+                   r=str(nearby_remotes),
+                   t=str(nearby_twists),
+                   s=str(residue_scheme),
+                   o=flp_out)
         os.system(cmd)
 
     # run filter_bonds
@@ -56,5 +80,13 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size):
     get_rotations.get_rotations(fb_out, out_dir, prot_dir)
 
     # run cluster analysis
+    shutil.copy(cluster_script, out_dir)
+    shutil.copy(cluster_file, out_dir)
+    rscript = os.path.join(out_dir, cluster_script)
+    for rot_file in os.listdir(out_dir):
+        if rot_file.endswith('.rot'):
+            f = os.path.join(out_dir, rot_file)
+            cmd = ' '.join(['Rscript', rscript, f])
+            os.system(cmd)
 
 # run as script
