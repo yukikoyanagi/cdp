@@ -2,7 +2,7 @@
 #
 # File: get_rotations.py
 #
-# Time-stamp: <2016-04-08 11:40:35 au447708>
+# Time-stamp: <2016-04-19 10:39:06 au447708>
 #
 # usage: get_rotations.py [-h] input outdir prot_dir
 #
@@ -23,6 +23,7 @@
 #  2016/03/16: yk: Made suffix optional. Added help & usage comment.
 #  2016/03/21: yk: Output per bond description rather than per protein
 #  2016/04/08: yk: Removed argument 'suffix'
+#  2016/04/19: yk: Changed output file ext to .rot
 
 
 import argparse
@@ -56,7 +57,7 @@ def get_rotations(input, outdir, prot_dir):
                         rotations[bond[2]] = [rot]
 
     for vs in rotations.iteritems():
-        with open('{}/{}.txt'.format(outdir, vs[0]), 'w') as o:
+        with open('{}/{}.rot'.format(outdir, vs[0]), 'w') as o:
             o.write('\n'.join(
                 '{}\t{}\t{}\t{}'.format(v[0], v[1], v[2], v[3])
                 for v in vs[1]))
