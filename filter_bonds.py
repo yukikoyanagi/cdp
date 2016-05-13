@@ -2,6 +2,8 @@
 #
 # File: filter_bonds.py
 #
+# Time-stamp: <2016-05-13 10:48:58 au447708>
+#
 # usage: filter_bonds.py [-h] source destination minimum
 #
 # Filters out bonds with no. of occurrence less than the specified number
@@ -18,12 +20,14 @@
 # History:
 #  2016/03/08: yk: Created
 #  2016/03/17: yk: Can now be imported as module
+#  2016/05/13: yk: Now filters by bond desc and residue class
 #
 
 import argparse
 import collections
 
 bond_col = 6  # Bond description is 7th column in the input file
+res_col = 7  # Residue description is 8th column in the input file
 
 
 def filter(source, dest, minimum):
@@ -32,13 +36,18 @@ def filter(source, dest, minimum):
     with open(source) as f:
         for line in f:
             cols = line.split('\t')
-            bonds[cols[bond_col].strip()] += 1
+            bond = '{b}_{r}'.format(
+                b=cols[bond_col].strip(),
+                r=cols[res_col].strip())
+            bonds[bond] += 1
 
     # If count greater than specified, copy to output
     with open(source) as s, open(dest, 'w') as d:
         for line in s:
             cols = line.split('\t')
-            bond = cols[bond_col].strip()
+            bond = '{b}_{r}'.format(
+                b=cols[bond_col].strip(),
+                r=cols[res_col].strip())
             if bonds.get(bond) >= minimum:
                 d.write(line)
 

@@ -2,7 +2,7 @@
 #
 # File: run_cluster_test.py
 #
-# Time-stamp: <2016-05-13 09:29:44 au447708>
+# Time-stamp: <2016-05-13 10:43:21 au447708>
 #
 # Author: Yuki Koyanagi
 # History:
@@ -17,5 +17,7 @@ temp_dir = "/home/au447708/QGM/data/temp2"
 out_dir = "/home/au447708/QGM/data/out2"
 input = "/home/au447708/QGM/data/test"
 window_size = 5
+residue_scheme = 2
 
-run_cluster.run(min_occurrence, temp_dir, out_dir, input, window_size)
+run_cluster.run(min_occurrence, temp_dir, out_dir, input,
+                window_size, residue_scheme=residue_scheme)
