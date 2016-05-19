@@ -2,7 +2,7 @@
 #
 # File: run_cluster.py
 #
-# Time-stamp: <2016-05-13 09:35:34 au447708>
+# Time-stamp: <2016-05-19 13:59:18 au447708>
 #
 # Author: Yuki Koyanagi
 #
@@ -10,6 +10,7 @@
 #  2016/03/29: yk: Created
 #  2016/04/08: yk: Split arg for find_local_patterns
 #  2016/04/19: yk: Now runs cluster analysis
+#  2016/05/19: yk: Delete temp_dir at the end
 
 
 import os
@@ -86,7 +87,11 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size,
     for rot_file in os.listdir(out_dir):
         if rot_file.endswith('.rot'):
             f = os.path.join(out_dir, rot_file)
-            cmd = ' '.join(['Rscript', rscript, f])
+            out = '.'.join([os.path.splitext(f)[0], 'out'])
+            cmd = ' '.join(['Rscript', rscript, f, '>&', out])
             os.system(cmd)
+
+    # cleanup
+    shutil.rmtree(temp_dir)
 
 # run as script

@@ -2,7 +2,7 @@
 #
 # File: get_rotations.py
 #
-# Time-stamp: <2016-04-19 10:39:06 au447708>
+# Time-stamp: <2016-05-19 10:05:59 au447708>
 #
 # usage: get_rotations.py [-h] input outdir prot_dir
 #
@@ -24,6 +24,7 @@
 #  2016/03/21: yk: Output per bond description rather than per protein
 #  2016/04/08: yk: Removed argument 'suffix'
 #  2016/04/19: yk: Changed output file ext to .rot
+#  2016/05/19: yk: Added residue info to the output
 
 
 import argparse
@@ -40,21 +41,23 @@ def get_rotations(input, outdir, prot_dir):
             protein = cols[0]
             l_num = cols[1]
             pattern = cols[6]
-            bonds.append((protein, l_num, pattern))
+            residue = cols[7]
+            bonds.append((protein, l_num, pattern, residue))
 
     # Build dict (protein:list of rotations) from list.
     # Assumes rotation vectors are in cols 16-19.
     rotations = dict()
-    for bond in bonds:
-        with open('{}/{}.txt'.format(prot_dir, bond[0])) as p:
+    for protein, l_num, pattern, residue in bonds:
+        with open('{}/{}.txt'.format(prot_dir, protein)) as p:
             for i, line in enumerate(p):
-                if i == int(bond[1])-1:
+                if i == int(l_num)-1:
                     cols = line.split()
                     rot = (cols[15], cols[16], cols[17], cols[18])
-                    if bond[2] in rotations:
-                        rotations[bond[2]].append(rot)
+                    desc = '{}_{}'.format(pattern, residue)
+                    if desc in rotations:
+                        rotations[desc].append(rot)
                     else:
-                        rotations[bond[2]] = [rot]
+                        rotations[desc] = [rot]
 
     for vs in rotations.iteritems():
         with open('{}/{}.rot'.format(outdir, vs[0]), 'w') as o:
