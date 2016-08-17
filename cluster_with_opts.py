@@ -2,7 +2,7 @@
 #
 # File: cluster_with_opts.py
 #
-# Time-stamp: <2016-05-19 14:02:17 au447708>
+# Time-stamp: <2016-06-28 11:56:08 yuki>
 #
 # Author: Yuki Koyanagi
 # History:
@@ -26,18 +26,18 @@ def getstep(path):
     return step
 
 
-def run(input_dir, out_dir, temp_dir, opts_file):
+def run(input_dir, out_dir, opts_file):
 
     assert os.path.isdir(input_dir)
     if not os.path.isdir(out_dir):
         os.mkdir(out_dir)
-    if not os.path.isdir(temp_dir):
-        os.mkdir(temp_dir)
     assert os.path.isfile(opts_file)
 
-    o_dir = os.path.join(out_dir, getstep(opts_file))
+    step_dir = os.path.join(out_dir, getstep(opts_file))
+    os.mkdir(step_dir)
+    o_dir = os.path.join(step_dir, 'out')
     os.mkdir(o_dir)
-    t_dir = os.path.join(temp_dir, getstep(opts_file))
+    t_dir = os.path.join(step_dir, 'temp')
     os.mkdir(t_dir)
 
     params = {}
@@ -59,9 +59,7 @@ if __name__ == '__main__':
     parser.add_argument('input_dir', help='Directory '
                         'containing protein files')
     parser.add_argument('out_dir', help='Output directory')
-    parser.add_argument('temp_dir', help='Temp directory for '
-                        'intermediate output')
     parser.add_argument('opts_file', help='.opts file with flp '
                         'parameters')
     args = parser.parse_args()
-    run(args.input_dir, args.out_dir, args.temp_dir, args.opts_file)
+    run(args.input_dir, args.out_dir, args.opts_file)

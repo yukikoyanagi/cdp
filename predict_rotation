@@ -1,0 +1,527 @@
+#!/usr/bin/perl
+#
+
+use strict;
+use warnings;
+
+use Getopt::Long;
+use File::Temp qw(tempdir);
+use File::Slurp;
+use File::Basename;
+
+use constant PI    => 4 * atan2(1, 1);
+use POSIX;
+
+use Math::GSL::Matrix;
+use Math::Trig qw(acos_real);
+
+use List::Util qw(sum);
+
+my $magic_matrix = compute_magic_matrix();
+my $magic_matrix_inverse = $magic_matrix->transpose();
+
+my %no_guess = (
+		step => -1,
+		patlenres => '?',
+		length => '?',
+		# reason => 'no_match',
+		# verdict => 0,
+		SO3 => Math::GSL::Matrix->new(3, 3)->identity(),
+		ev => '0.0,0.0,0.0',
+		quality => -1,
+	       );
+
+
+# We currently accept a single mandatory option (that's an oxymoron,
+# yes): The directory to base the algorithm on. That directory should
+# contain a number of stepX_assess files, whose contents will be
+# parsed to direct the algorithm. We may add other options later.
+#
+# Trailing arguments are protein files, in the format expected by
+# find_local_patterns.py. Note find_local_patterns.py (and cdp.py)
+# must be in the current dir.
+#
+# Produces output on stdout:
+
+
+my $assess_dir;
+
+my $tmpdir;
+my $protein_file;
+my $min_quality = 0;
+my $keep_tmp = 0;
+my $debug;
+my $min_window_size = 0;
+my $max_window_size = 1000;
+my $min_twist = -1;
+my $max_twist = 1000;
+my $residue_schemes = undef;
+my $extreme_remotes = 0; # only use runs with r==0 or r==w
+
+GetOptions("debug!" => \$debug,
+	   "dir=s" => \$assess_dir,
+	   "protfile=s" => \$protein_file,
+	   "min-quality=i" => \$min_quality,
+	   "keep-tmp!" => \$keep_tmp,
+	   "min-window=i" => \$min_window_size,
+	   "max-window=i" => \$max_window_size,
+	   "res-scheme=s" => \$residue_schemes,
+	   "min-twist=i" => \$min_twist,
+	   "max-twist=i" => \$max_twist,
+	   "extreme-remotes!" => \$extreme_remotes,
+)
+    or print_usage();
+
+defined $assess_dir
+    or die "the --dir option must be given";
+
+# These are indexed by step number (we always assume those start at
+# 0). The first, flp_opts, is just an array of strings, passed to
+# find_local_patterns (hence flp). The second is an array of hashrefs,
+# the keys of which are the patterns encountered at that step. The
+# value is a small hashref with keys:
+#
+# verdict: 0 or 1 (did we accept this pattern)
+#
+# reason: a string 'explaining' verdict
+#
+# SO3: a Math::GSL::Matrix instance representing our guess for the
+# rotation (the center of the primary mode-box, after de-applying the
+# magic rotation)
+#
+# ev: a string of three comma-separated floating point numbers
+# representing the same as SO3.
+
+my @flp_opts;
+my @assess;
+my %assess_files;
+
+# This data structure contains all the information about the Hbonds,
+# both what we read from the original protein file and the results
+# from the algorithm. Everything is keyed by (protein name, line
+# number). Some Hbonds are ignored by find_local_patterns (bifurcated
+# sites), so there's no way we can provide a prediction for those.
+#
+# $Hbonds{$prot}{$lineno} is a hashref. =>rotation is the SO3 matrix
+# representing the actual rotation. =>guess is the current best guess.
+
+my %Hbonds;
+
+$tmpdir = tempdir('predict_XXXXXX', CLEANUP => !$keep_tmp, TMPDIR => 1);
+dbg("created tmp directory %s\n", $tmpdir);
+read_assess_dir($assess_dir);
+
+# If no --protfile given, use the trailing args. Write them to a file
+# and use that as protfile.
+if (not defined $protein_file) {
+    $protein_file = "${tmpdir}/proteins";
+    write_file($protein_file, map {"$_\n"} @ARGV );
+}
+
+# Read the actual rotations for the Hbonds.
+read_proteins();
+
+# Now do find_local_patterns.py on all the proteins with all the
+# various options. This shouldn't take that long.
+for (my $s = 0; $s < scalar keys %assess_files; ++$s) {
+    my $outfile = "${tmpdir}/out${s}.txt";
+
+    dbg("reading assesment file %4d\n", $s);
+    read_assess_file($s, $assess_files{$s});
+
+    if (!defined $flp_opts[$s]) {
+	dbg("skipping step %d\n", $s);
+	next;
+    }
+
+    # Adjust quality so that later steps get a minor bonus. The
+    # denominator should maybe be #steps, but this also works.
+    for (keys %{$assess[$s]}) {
+	$assess[$s]{$_}{quality} += $s / 100000;
+    }
+
+    dbg("running step %d, writing to %s\n", $s, $outfile);
+    system("cat ${protein_file} | parallel -j8 -k -X ./find_local_patterns.py $flp_opts[$s] > ${outfile}") == 0
+	or die "system(): $!";
+    read_pattern_output($outfile, $s);
+    unlink $outfile unless $keep_tmp;
+
+    $assess[$s] = undef;
+}
+
+# And now, try to "predict" the rotations; what we're actually doing
+# is of course guessing a rotation and then comparing it to the actual
+# rotation. In a "real" sitation, we would only have the combinatorial
+# information available, and then our guesses/prediction could, of
+# course, not be validated.
+for my $prot (sort keys %Hbonds) {
+    for my $lineno (sort {$a <=> $b} keys %{$Hbonds{$prot}}) {
+	my $Hbond = $Hbonds{$prot}{$lineno};
+	# if (not exists $Hbond->{patterns}) {
+	#     # We don't have any meaningful patterns for this Hbond, so skip it silently for now.
+	#     next;
+	#     printf STDERR "skipping (%s, %d): no patterns\n", $prot, $lineno;
+	# }
+	# # We should have one pattern for each step.
+	# die "weird: number of patterns for $prot, $lineno doesn't match number of steps\n"
+	#     unless @{$Hbond->{patterns}} == @assess;
+	# my $guess = \%no_guess;
+
+	# if (not exists $Hbond->{guess}) {
+	#     next;
+	#     printf STDERR "skipping (%s, %d): no patterns\n", $prot, $lineno;
+	# }
+
+	my $guess = $Hbond->{guess} // \%no_guess;
+	# # # We really should make several passes over the steps. In the
+	# # # first pass, we are only happy with an 'all_good' guess. In
+	# # # the second, we might settle for a 'major_good_cluster', and
+	# # # further down we might settle for 'too_few'. In the end, we
+	# # # might end up not having a guess at all.
+# 	for (my $s = 0; $s < @assess; ++$s) {
+# 	    my $patlenres = $Hbond->{patterns}[$s];
+# 	    if (exists $assess[$s]{$patlenres}) {
+# 		die "$patlenres has no quality" unless exists $assess[$s]{$patlenres}{quality};
+# 		die unless exists $guess->{quality};
+# # Should we choose "first best" or "last best"? This becomes moot when the quality becomes a floating point number.
+# 		if ($assess[$s]{$patlenres}{quality} >= $guess->{quality}) {
+# 		# if ($assess[$s]{$patlen}{quality} > $guess->{quality}) {
+# 		    $guess = $assess[$s]{$patlenres};
+# 		}
+# 	    }
+# 	}
+
+	if ($guess->{quality} >= $min_quality) {
+	    printf "%s\t%d\t%.4f\t%f\t%s\t%s\t%s\t%d\n",
+		$prot, $lineno, $guess->{quality}, SO3_distance($Hbond->{rotation}, $guess->{SO3}), $guess->{ev},
+		    $guess->{patlenres}, $guess->{length}, $guess->{step};
+	}
+
+    }
+}
+
+
+
+sub read_pattern_output {
+    my $f = shift;
+    my $step = shift;
+    open(my $fh, '<', $f)
+	or die ("unable to open $f: $!");
+    while (<$fh>) {
+	chomp;
+	my @fields = split;
+	my $prot = $fields[0];
+	my $lineno = $fields[1];
+	my $len = $fields[5];
+	my $pattern = $fields[6];
+	my $res = exists $fields[7] ? "_" . $fields[7] : "";
+	my $patlenres = "${pattern}_${len}${res}";
+	if (exists $assess[$step]{$patlenres}) {
+	    die "$patlenres has no quality" unless exists $assess[$step]{$patlenres}{quality};
+	    my $Hbond = $Hbonds{$prot}{$lineno};
+	    if (!exists $Hbond->{guess} || $assess[$step]{$patlenres}{quality} > $Hbond->{guess}{quality}) {
+		$Hbond->{guess} = $assess[$step]{$patlenres};
+	    }
+	}
+	# push @{$Hbonds{$prot}{$lineno}{patterns}}, $patlenres;
+    }
+    close($fh);
+}
+
+sub read_proteins {
+    dbg("reading list of proteins from %s\n", $protein_file);
+    open(my $fh, '<', $protein_file)
+	or die ("unable to open $protein_file: $!");
+    while (<$fh>) {
+	dbgr("read protein #%5d", $.);
+	chomp;
+	read_protein_file($_);
+    }
+    dbgr("\n");
+    close($fh);
+}
+
+sub read_protein_file {
+    my $f = shift;
+    open(my $fh, '<', $f)
+	or die "unable to open $f: $!";
+    my $prot = basename($f, ".txt");
+    # We have the line number (1-based) in $.. The fields we need from
+    # the file are, with 0-based indexing:
+    #
+    # 15-17: unit vector of rotation
+    # 18: angle of rotation
+
+    while (<$fh>) {
+	chomp;
+	my @fields = split;
+	# my $prot = $fields[9];
+	my $rot = EV_to_SO3(@fields[15 .. 18]);
+	$Hbonds{$prot}{$.}{rotation} = $rot;
+    }
+    close($fh);
+}
+
+sub read_assess_dir {
+    my $dir = shift;
+    dbg("reading assessment directory %s\n", $dir);
+    opendir(my $dh, $dir)
+	or die "could not open $dir: $!";
+    foreach (readdir($dh)) {
+	next unless m/step([0-9]+)_assess/;
+	my $step = $1 + 0;
+	$assess_files{$step} = "${dir}/$_";
+    }
+    closedir($dh);
+    # Check that the steps are contiguous starting from 0.
+    my $i = 0;
+    for (sort {$a <=> $b} keys %assess_files) {
+	die "non-contiguous step numbers!" unless ($_ == $i);
+	$i++;
+    }
+}
+
+sub read_assess_file {
+    my $step = shift;
+    my $file = shift;
+    open(my $fh, '<', $file)
+	or die "unable to open $file: $!";
+    while (<$fh>) {
+	chomp;
+	if (m/^# @ pattern-options\s*(.*)$/) {
+	    my $opts = $1;
+	    if ($opts =~ /--window-size\s+([0-9]+)/ &&
+		($1 < $min_window_size || $1 > $max_window_size)) {
+		last;
+	    }
+	    if ($opts =~ /--nearby-twists\s+(-?[0-9]+)/ &&
+		($1 < $min_twist || $1 > $max_twist)) {
+		last;
+	    }
+	    if (defined $residue_schemes &&
+		$opts =~ /--residue-scheme\s+([0-9]+)/ &&
+		$residue_schemes !~ /$1/) {
+		last;
+	    }
+	    if ($extreme_remotes &&
+		$opts =~ /--window-size\s+([0-9]+)/ &&
+		!(($opts =~ /--nearby-remotes\s+$1/) || ($opts =~ /--nearby-remotes 0/))) {
+		last;
+	    }
+	    $flp_opts[$step] = $opts;
+	    next;
+	}
+	# For now, we ignore all other 'comment' lines.
+	next if (m/^#/);
+	# We have a 'pattern' line.
+	#
+	# Field 6 is the unrotated box as an Euler vector, but that
+	# has been rounded to two decimal places. So we prefer to do
+	# the rounding again (and we need the SO3 matrix,
+	# anyway). Also, all fields beyond the quality field are
+	# completely uninteresting for now.
+	my ($patlenres, $len, $mode, undef, $quality) = split;
+	my ($x, $y, $z) = map { idx_to_coord($_) } split /,/, $mode;
+	my $SO3 = undo_magic_rotation($x, $y, $z);
+	my $ev = sprintf "%f,%f,%f", SO3_to_EV($SO3);
+
+	die "key $patlenres already exists at step $step"
+	    if exists $assess[$step]{$patlenres};
+	$assess[$step]{$patlenres} =
+	    {
+	     step => $step,
+	     patlenres => $patlenres,
+	     length => $len,
+	     SO3 => $SO3,
+	     ev => $ev,
+	     quality => $quality,
+	    };
+    }
+    close($fh);
+}
+
+
+
+sub coord_to_idx {
+    # The boxes are numbered 1..81, with box i covering [-pi +
+    # 2pi*(i-1)/81, -pi + 2pi*i/81]. Hence the index corresponding to
+    # a given coordinate w is ceil((w+pi)*81/2pi).
+    my $w = shift;
+    # The int() is to force perl to treat the scalar as an integer; we
+    # need its stringification to be e.g. "39", not "39.0" or some
+    # other floating point representation. Yes, it's fragile as
+    # hell...
+    return int(ceil( ($w + PI)*81 / (2*PI) ));
+}
+
+sub idx_to_coord {
+    # We want the "middle" of the box. According to the above, this
+    # means we should return this:
+    my $w = shift;
+    return -(PI) + (2*PI*($w - 0.5))/81;
+}
+
+
+sub Math::GSL::Matrix::trace {
+    my ($mat) = @_;
+    my $t = 0;
+    return sum(map {$mat->get_elem($_,$_)} (0..2));
+}
+
+sub SO3_distance {
+    my ($A, $B) = @_;
+    my $t = ($A->transpose() * $B)->trace();
+    # $t = 3 if ($t > 3);
+    # $t = -1 if ($t < -1);
+    return acos_real(($t - 1)/2);
+}
+
+sub EV_to_SO3 {
+    my ($x, $y, $z, $angle);
+
+    if (@_ == 4) {
+	($x, $y, $z, $angle) = @_;
+    } elsif (@_ == 3) {
+	($x, $y, $z) = @_;
+	$angle = sqrt($x*$x + $y*$y + $z*$z);
+	if ($angle > 0) {
+	    $x /= $angle;
+	    $y /= $angle;
+	    $z /= $angle;
+	} else {
+	    $x = 1;
+	    $y = 0;
+	    $z = 0;
+	}
+    }
+
+    my $K = Math::GSL::Matrix->new(3, 3);
+    $K->set_row(0, [0, -$z, $y]);
+    $K->set_row(1, [$z, 0, -$x]);
+    $K->set_row(2, [-$y, $x, 0]);
+    my $K2 = $K*$K;
+    return Math::GSL::Matrix->new(3, 3)->identity() + sin($angle)*$K + (1-cos($angle))*$K2;
+}
+
+sub SO3_to_EV {
+    my $M = shift;
+    my $t = $M->trace();
+    # $t = 3 if ($t > 3);
+    # $t = -1 if ($t < -1);
+    my $angle = acos_real(($t - 1)/2);
+    # Kludge #1:
+    return (0, 0, 0) if $angle == 0;
+
+    if (sin($angle) > 0.0001) {
+	# The normal case: Angle is away from 0 and pi.
+	my $x = $M->get_elem(2, 1) - $M->get_elem(1, 2);
+	my $y = $M->get_elem(0, 2) - $M->get_elem(2, 0);
+	my $z = $M->get_elem(1, 0) - $M->get_elem(0, 1);
+	my $n = sqrt($x*$x + $y*$y + $z*$z);
+	if (abs($n-2*sin($angle)) > 0.001) {
+	    printf STDERR "Unexpected large diff (%f) between |v| and 2sin(angle)\n", abs($n-2*sin($angle));
+	}
+	# $x /= $n;
+	# $y /= $n;
+	# $z /= $n;
+	# return ($x, $y, $z, $angle);
+	return ($x, $y, $z);
+    }
+
+    if ($t < 0) {
+	# Angle is close to pi.
+	my $B = ($M + Math::GSL::Matrix->new(3,3)->identity()) * .5;
+	my ($x, $y, $z) = (sqrt($B->get_elem(0,0)),
+			   sqrt($B->get_elem(1,1)),
+			   sqrt($B->get_elem(2,2)));
+	if ($x > 0) {
+	    $y = -$y if ($M->get_elem(0, 1) < 0);
+	    $z = -$z if ($M->get_elem(0, 2) < 0);
+	} else {
+	    $z = -$z if ($M->get_elem(1, 2) < 0);
+	}
+	# my $n = sqrt($x*$x + $y*$y + $z*$z);
+	# $x /= $n;
+	# $y /= $n;
+	# $z /= $n;
+	# return ($x, $y, $z, $angle);
+	return ($x, $y, $z);
+    }
+
+}
+
+sub do_magic_rotation {
+    my ($x, $y, $z, $angle) = @_;
+    $angle //= 1.0;
+    # Normalize $x,$y,$z
+    my $n = sqrt($x*$x + $y*$y + $z*$z);
+    $x /= $n;
+    $y /= $n;
+    $z /= $n;
+    $angle *= $n;
+    my $mat = EV_to_SO3($x, $y, $z, $angle);
+    # $mat is a Math::GSL::Matrix instance. Can multiply directly by $magic_matrix.
+    $mat = $magic_matrix * $mat;
+
+    return $mat;
+
+    ## The caller may also need the matrix, so let him apply
+    ## SO3_to_EV, to avoid having to apply EV_to_SO3 to the returned
+    ## Euler vector...
+
+    # return SO3_to_EV($mat);
+}
+
+sub undo_magic_rotation {
+    my ($x, $y, $z, $angle) = @_;
+    $angle //= 1.0;
+    # Normalize $x,$y,$z
+    my $n = sqrt($x*$x + $y*$y + $z*$z);
+    if ($n) {
+	$x /= $n;
+	$y /= $n;
+	$z /= $n;
+    }
+    $angle *= $n;
+    my $mat = EV_to_SO3($x, $y, $z, $angle);
+    # $mat is a Math::GSL::Matrix instance. Can multiply directly by $magic_matrix.
+    $mat = $magic_matrix_inverse * $mat;
+
+    return $mat;
+
+    ## The caller may also need the matrix, so let him apply
+    ## SO3_to_EV, to avoid having to apply EV_to_SO3 to the returned
+    ## Euler vector...
+
+    # return SO3_to_EV($mat);
+}
+
+sub compute_magic_matrix {
+    my $delta = 2*PI/81;
+    my $xt = 32;
+    my $yt = 70;
+    my $zt = 31;
+    $xt = -(PI) + ($xt - .5)*$delta;
+    $yt = -(PI) + ($yt - .5)*$delta;
+    $zt = -(PI) + ($zt - .5)*$delta;
+    return EV_to_SO3($xt, $yt, $zt)->transpose(); # The inverse is the same as the transpose...
+}
+
+
+sub dbg {
+    return unless $debug;
+    my ($fmt, @args) = @_;
+    my $str = localtime;
+    $str .= "\t";
+    $str .= sprintf $fmt, @args;
+    $str .= "\n" if ($str !~ m/\n$/);
+    print STDERR $str;
+}
+sub dbgr {
+    return unless $debug;
+    my ($fmt, @args) = @_;
+    my $str = localtime;
+    $str .= "\t";
+    $str .= sprintf $fmt, @args;
+    print STDERR "\r" . $str;
+}

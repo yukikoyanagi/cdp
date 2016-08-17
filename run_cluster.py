@@ -2,7 +2,7 @@
 #
 # File: run_cluster.py
 #
-# Time-stamp: <2016-05-19 13:59:18 au447708>
+# Time-stamp: <2016-05-27 10:13:48 au447708>
 #
 # Author: Yuki Koyanagi
 #
@@ -11,6 +11,8 @@
 #  2016/04/08: yk: Split arg for find_local_patterns
 #  2016/04/19: yk: Now runs cluster analysis
 #  2016/05/19: yk: Delete temp_dir at the end
+#  2016/05/24: yk: Changed outpur redirect to solve bad fd number
+#  2016/05/27: yk: Run clustering for files without extenstion (".")
 
 
 import os
@@ -85,10 +87,10 @@ def run(min_occurrence, temp_dir, out_dir, input, window_size,
     shutil.copy(cluster_file, out_dir)
     rscript = os.path.join(out_dir, cluster_script)
     for rot_file in os.listdir(out_dir):
-        if rot_file.endswith('.rot'):
+        if "." not in rot_file:
             f = os.path.join(out_dir, rot_file)
             out = '.'.join([os.path.splitext(f)[0], 'out'])
-            cmd = ' '.join(['Rscript', rscript, f, '>&', out])
+            cmd = ' '.join(['Rscript', rscript, f, '>', out, '2>&1'])
             os.system(cmd)
 
     # cleanup
