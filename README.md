@@ -24,5 +24,5 @@ The scripts should be archived in a file called cdp.tar.bz2. `make_cdp_tar.sh` c
  *The following steps can be performed on spencer (or own machine)*
 
 5. Create a directory containing all the \*_assess files from the analysis.
-6. Run `predict_rotation` (perl script), passing `--dir={assess directory}` and the protein files as arguments. `predict_rotation` produces output in STDOUT.
+6. Run `predict_rotation` (perl script), passing `--dir={assess directory}` and the protein files as arguments. `predict_rotation` produces output in STDOUT. It takes multiple file arguments, so `./predict_rotation --dir=assess/ test/*` would work.
 7. On spencer, can use quickstat to produce summary statistics.
