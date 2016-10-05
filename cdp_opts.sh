@@ -2,7 +2,7 @@
 #
 # File: cdp_opts.sh
 #
-# Time-stamp: <2016-08-17 09:33:06 au447708>
+# Time-stamp: <2016-10-03 10:53:56 au447708>
 #
 # Usage: cdp_opts.sh {step number}
 #
@@ -18,12 +18,21 @@ set -e
 IMPROVE_SCRIPT="improve_modebox.pl"
 EVALUATE_SCRIPT="evaluate_clustering.pl"
 STEP="step$1"
+LOG="${STEP}.log"
+MIN_NO=30
 
-./cluster_with_opts.py prot . opts/${STEP}_opts
+echo "$(date +'%Y-%m-%d %T'): Start clustering" >> $LOG
+
+./cluster_with_opts.py prot . opts/${STEP}_opts -m ${MIN_NO}
+
+echo "$(date +'%Y-%m-%d %T'): Finished clustering" >> $LOG
 
 #cd into output dir and run post analysis
-#cd /scratch/${PBS_JOBID}/${STEP}/out
+#Remenber log file!
+cp $LOG ${STEP}/out
 cd ${STEP}/out
+
+echo "$(date +'%Y-%m-%d %T'): Start improve_modebox.pl" >> $LOG
 
 cp ../../${IMPROVE_SCRIPT} .
 find . -name '*Summary.txt' | \
@@ -37,14 +46,22 @@ find . -name '*Summary2.txt' | \
     xargs awk -v d="${p##*/}" '$0=d"/"FILENAME"\t"$0' | \
     sed 's|/./|/|' > ${STEP}_summary2.txt
 
+echo "$(date +'%Y-%m-%d %T'): Finished improve_modebox.pl" >> $LOG
+
 #We only need the summary file now, and evaluate_clustering
 #require dir name to be step**
 
+cp $LOG ../
 cd ../
 cp out/${STEP}_summary2.txt .
 cp ../${EVALUATE_SCRIPT} .
 cp ../opts/${STEP}_opts .
+
+echo "$(date +'%Y-%m-%d %T'): Start evaluate_clustering.pl" >> $LOG
+
 ./${EVALUATE_SCRIPT} ${STEP}_summary2.txt --flp-out-dir .
+
+echo "$(date +'%Y-%m-%d %T'): Finished evaluate_clustering.pl" >> $LOG
 
 tar -cjf ${STEP}.tar.bz2 ./${STEP}*
 

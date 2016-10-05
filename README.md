@@ -28,8 +28,8 @@ The scripts should be archived in a file called cdp.tar.bz2. `make_cdp_tar.sh` c
 
     `Protein_id line_no quality SO3_distance_from_true_rotation guess_vector pattern central_bond_dist step_no`
 
-7. On spencer, can use quickstat to produce summary statistics.
-    `cut -f 4 prediction.txt | quickstat --linhist=30 > stat_out200.txt`
-    `awk '$7=="L" {print $4}' prediction.txt | quickstat --linhist=30 > stat_L_out200.txt`
+7. Use getstat.py to produce summary statistics. Copy the file to the working dir and do;
+    `cut -f 4 prediction.txt | ./getstat.py -t so3 > stat_out200_so3.txt`
+    `awk '$7=="L" {print $4}' prediction.txt | ./getstat.py -t so3 > stat_L_out200_so3.txt`
     (Note column 7 (1-based) contains length)
-    `awk '$7!="L" {print $4}' prediction.txt | quickstat --linhist=30 > stat_nonL_out200.txt`
+    `awk '$7!="L" {print $4}' prediction.txt | ./getstat.py -t so3 > stat_nonL_out200_so3.txt`

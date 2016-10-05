@@ -2,11 +2,13 @@
 #
 # File: cluster_with_opts.py
 #
-# Time-stamp: <2016-06-28 11:56:08 yuki>
+# Time-stamp: <2016-10-03 09:24:37 au447708>
 #
 # Author: Yuki Koyanagi
 # History:
 #  2016/05/19: yk: Created
+#  2016/09/23: yk: Changed min_occurrence to 15
+#  2016/10/03: yk: Accept optional param min_occurrence
 
 
 import os
@@ -14,7 +16,7 @@ import argparse
 import run_cluster
 
 # We ignore all bond descriptions with less than 30 occurrences
-min_occurrence = 30
+# min_occurrence = 15
 window_size = 'window-size'
 nearby_remotes = 'nearby-remotes'
 nearby_twists = 'nearby-twists'
@@ -26,7 +28,7 @@ def getstep(path):
     return step
 
 
-def run(input_dir, out_dir, opts_file):
+def run(input_dir, out_dir, opts_file, min_no):
 
     assert os.path.isdir(input_dir)
     if not os.path.isdir(out_dir):
@@ -47,7 +49,7 @@ def run(input_dir, out_dir, opts_file):
             if len(opt_col) > 1:
                 params[opt_col[0].lstrip('-')] = opt_col[1]
 
-    run_cluster.run(min_occurrence, t_dir, o_dir, input_dir,
+    run_cluster.run(min_no, t_dir, o_dir, input_dir,
                     params[window_size],
                     nearby_remotes=params[nearby_remotes],
                     nearby_twists=params[nearby_twists],
@@ -61,5 +63,13 @@ if __name__ == '__main__':
     parser.add_argument('out_dir', help='Output directory')
     parser.add_argument('opts_file', help='.opts file with flp '
                         'parameters')
+    parser.add_argument('-m', '--min_occurrence',
+                        help='Min. number of '
+                        'occurrences for inclusion in analysis. '
+                        'Bond descriptions that have fewer '
+                        'occurrences than this param are ignored. '
+                        'Default: 30',
+                        type=int, default=30)
     args = parser.parse_args()
-    run(args.input_dir, args.out_dir, args.opts_file)
+    run(args.input_dir, args.out_dir, args.opts_file,
+        args.min_occurrence)
