@@ -2,7 +2,7 @@
 #
 # File: cdp_opts.sh
 #
-# Time-stamp: <2016-10-03 10:53:56 au447708>
+# Time-stamp: <2016-10-07 09:22:58 au447708>
 #
 # Usage: cdp_opts.sh {step number}
 #
@@ -19,7 +19,7 @@ IMPROVE_SCRIPT="improve_modebox.pl"
 EVALUATE_SCRIPT="evaluate_clustering.pl"
 STEP="step$1"
 LOG="${STEP}.log"
-MIN_NO=30
+MIN_NO=10
 
 echo "$(date +'%Y-%m-%d %T'): Start clustering" >> $LOG
 

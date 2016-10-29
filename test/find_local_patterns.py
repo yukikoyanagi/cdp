@@ -1,1 +1,0 @@
-../find_local_patterns.py
