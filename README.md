@@ -27,10 +27,10 @@ The scripts should be archived in a file called cdp.tar.bz2. `make_cdp_tar.sh` c
 6. cd into spencer:~/grendel
 7. Run './postprocess.sh [path to tar file]. This creates 4 output txt files in the same directory as the tar file. They are;
 
-prediction.txt: Raw prediction data
+ prediction.txt: Raw prediction data
 
-stat_out200_so3.txt: Summary statistics for all bonds
+ stat_out200_so3.txt: Summary statistics for all bonds
 
-stat_L_out200_so3.txt: Summaty statistics for long-range bonds
+ stat_L_out200_so3.txt: Summaty statistics for long-range bonds
 
-stat_nonL_out200_so3.txt: Summary statistics for non-long bonds
+ stat_nonL_out200_so3.txt: Summary statistics for non-long bonds
