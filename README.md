@@ -20,16 +20,17 @@ The scripts should be archived in a file called cdp.tar.bz2. `make_cdp_tar.sh` c
 2. Ensure the parameters in cdp.sh file are correct (email address, walltime, etc.)
 3. Send the job with qsub.
 4. It will produce files called step\*.tar.bz2, containing opts file, clustering summary and the assessment file.
+5. tar all ste'\*.tar.bz2 files and send it to spencer:~/grendel/[some directory]
 
  *The following steps can be performed on spencer (or own machine)*
 
-5. Create a directory containing all the \*_assess files from the analysis.
-6. Run `predict_rotation` (perl script, requires find_local_patterns.py and cdp.py in the same dir), passing `--dir={assess directory}` and the protein files as arguments. `predict_rotation` produces output in STDOUT. It takes multiple file arguments, so `./predict_rotation --dir=assess/ test/*` would work. Output is as follows:
+6. cd into spencer:~/grendel
+7. Run './postprocess.sh [path to tar file]. This creates 4 output txt files in the same directory as the tar file. They are;
 
-    `Protein_id line_no quality SO3_distance_from_true_rotation guess_vector pattern central_bond_dist step_no`
+prediction.txt: Raw prediction data
 
-7. Use getstat.py to produce summary statistics. Copy the file to the working dir and do;
-    `cut -f 4 prediction.txt | ./getstat.py -t so3 > stat_out200_so3.txt`
-    `awk '$7=="L" {print $4}' prediction.txt | ./getstat.py -t so3 > stat_L_out200_so3.txt`
-    (Note column 7 (1-based) contains length)
-    `awk '$7!="L" {print $4}' prediction.txt | ./getstat.py -t so3 > stat_nonL_out200_so3.txt`
+stat_out200_so3.txt: Summary statistics for all bonds
+
+stat_L_out200_so3.txt: Summaty statistics for long-range bonds
+
+stat_nonL_out200_so3.txt: Summary statistics for non-long bonds
