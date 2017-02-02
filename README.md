@@ -7,6 +7,7 @@ These are the scripts used for the CDP analysis.
 3. Python: Need 2.7.12. On grendel we can do 'module load python/2.7.12'
 4. perl: Required 5.10.1. Recommended 5.14.2 (this is the version on spencer). If installing without root privilege, an easy way is to use perlbrew <https://perlbrew.pl/>. After installing perlbrew and the appropriate version of perl (see the instruction on the website), do 'perlbrew switch perl-5.4.12' to set default version.
 5. perl modules: Need File::Slurp and Math::GSL. The easiest way, if perl was installed with perlbrew as above, is to use cpanm. Do 'perlbrew install-cpanm' to install cpanm, and then 'cpanm install File::Slurp' and 'cpanm install Math::GSL'.
+6. If GSL is unavailable via module, it needs to be manually installed. Follow the instructions in http://www.cnblogs.com/emanlee/p/3318337.html. I don't think intel compiler is needed. To install Math::GSL, you'll need to set a couple of environment variables. First CPATH, which needs to point to ~/dev/include (if you followed the above link to install GSL). Then LD_LIBRARY_PATH, which needs to point to ~/dev/lib. Then run 'cpanm Math::GSL' it should run.
 
 ## Data requirements
 The dataset used for analysis is described in QGM Aarhus' DropBox.  But the scripts assume some things about the data structure.  The protein files should be archived in a file called prot.tar.bz2, with the directory structure prot/{protein id}.txt. The option files should be called step\*\_opts and should be archived in a file called opts.tar.bz2, with the directory structure opts/step\*\_opts. 
