@@ -2,10 +2,10 @@
 #
 # File: postprocess.sh
 #
-# Time-stamp: <2016-11-11 10:04:55 au447708>
+# Time-stamp: <2017-01-25 09:18:45 au447708>
 #
 # Description: Runs post-processing of cdp data.
-# To be used in spqncer:~/grendel
+# To be used in spencer:~/grendel
 #
 # Usage: ./postprocess.sh [path to tar file]
 #
@@ -14,6 +14,7 @@
 #
 # Author: Yuki Koyanagi
 # History:
+#  2017-01-25: Updated for use with Abacus output files
 #
 
 if [ $# -eq 0 ]
@@ -27,13 +28,7 @@ tarfile=$(basename $1)
 cd $dir
 mkdir assess
 
-tar xf $tarfile
-find . -name 'step*' \
-    | sed 's#./##' \
-    | sed 's#.tar.bz2##' \
-    | parallel tar xjf {}.tar.bz2 -C assess ./{}_assess
-
-rm step*.tar.bz2
+tar xjf $tarfile -C assess
 
 ln -s ~/grendel/predict_rotation .
 ln -s ~/grendel/find_local_patterns.py .
