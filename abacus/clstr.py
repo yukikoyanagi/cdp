@@ -2,11 +2,13 @@
 #
 # File: clstr.py
 #
-# Time-stamp: <2017-01-28 22:18:35 yuki>
+# Time-stamp: <2017-02-02 20:05:02 yuki>
 #
 # Description: Run cluster analysis on Abacus. Step no's are obtained
 #  from $SLURM_JOB_NAME, which should be in the form {name}.start.end
-#  or {name}-group#-#ofgroups.
+#  or {name}-group#-#ofgroups. To overwrite existing summary.pkl
+#  files, start $SLURM_JOB_NAME with 'rp'. Default is to skip the
+#  step if summary.pkl file exists.
 #  Change minn parameter as required.
 #
 # Author: Yuki Koyanagi
@@ -16,6 +18,8 @@
 #   too many threads.
 #  2017-01-20: Use subprocess module instead of os.system() to run
 #   improve_modebox script.
+#  2017-02-02: Set default to skip the step if summary.pkl file exits.
+#   Output summary.pkl file are written as the steps are finished.
 #
 import os
 import cPickle as pickle
@@ -102,18 +106,25 @@ elif '-' in jobname:
 else:
     raise SyntaxError('SLURM_JOB_NAME not set correctly.')
 
+overwrite = jobname.startswith('rp')
+
 cdpdir = os.path.join(os.path.expandvars('$WORK'), 'cdp')
 
 # Submit jobs to server
 clsts = []
+submitted = []
 
 for step in steps:
     # Load the rotation data
     workdir = os.path.join(cdpdir,
                            'step{}'.format(step),
                            'n{}'.format(minn))
-    # Test workdir
-    # workdir = os.path.join(os.path.expandvars('$WORK'), 'test')
+    if (
+            (not overwrite) and
+            os.path.exists(os.path.join(workdir, 'summary.pkl'))):
+        print 'Skipping step{}. Summary.pkl file exists.'.format(step)
+        continue
+
     rotfile = os.path.join(workdir, 'rotations.pkl')
     with open(rotfile, 'rb') as r:
         rotations = pickle.load(r)
@@ -123,27 +134,26 @@ for step in steps:
         clstr = job_server.submit(runclstrs,
                                   (subset, step),
                                   (runclstr,),
-                                  ('os', 'subprocess'))
+                                  ('os', 'subprocess'),
+                                  None,
+                                  (),
+                                  'step{}'.format(step))
         clsts.append(clstr)
+    submitted.append(step)
 
-job_server.wait()
-job_server.print_stats()
-
-# Get the results in dict of ditcs; {step:{pattern:content}}
-summary = {}
-for clst in clsts:
-    step, d = clst()
-    if step in summary:
-        summary[step].update(d)
-    else:
-        summary[step] = d
-
-for step in summary:
+# Get the results in dict; {pattern: content}
+for step in submitted:
+    job_server.wait('step{}'.format(step))
+    summary = {}
+    for clst in [task for task in clsts
+                 if task.group == 'step{}'.format(step)]:
+        step, d = clst()
+        summary.update(d)
     outf = os.path.join(cdpdir,
                         'step{}'.format(step),
                         'n{}'.format(minn),
                         'summary.pkl')
     with open(outf, 'wb') as o:
-        pickle.dump(summary[step], o)
+        pickle.dump(summary, o)
 
 # job_server.destroy()

@@ -3,7 +3,7 @@
 #SBATCH --account austmathjea_slim      # account
 #SBATCH --nodes 1                 # number of nodes
 #SBATCH --ntasks-per-node 24      # number of MPI tasks per node
-#SBATCH --time 0:30:00            # max time (HH:MM:SS)
+#SBATCH --time 1:00:00            # max time (HH:MM:SS)
 #
 # File: flpab.sh
 #
@@ -24,8 +24,8 @@ module load python-intel
 
 # Start in total [nodes]*24 MPI ranks on all available CPU cores
 # srun python ./flp.py
-# srun python ./filtrflp.py
-# srun python ./rotab.py
-srun python ./eval.py
+srun python ./filtrflp.py
+srun python ./rotab.py
+# srun python ./eval.py
 
 echo Done: "$(date)"
